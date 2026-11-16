@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -29,6 +30,8 @@ DEFAULT_FILENAME_PATTERN = (
 )
 
 KNOWN_AUDIO_LABEL_STYLES = {"multi", "joined"}
+
+_WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def split_csv(value: Any) -> list[str]:
@@ -69,8 +72,16 @@ def split_paths(value: Any) -> list[Path]:
                 parsed = None
             if isinstance(parsed, list):
                 return [Path(str(item)).expanduser() for item in parsed if str(item).strip()]
-        separator = ";" if os.pathsep == ";" else ":"
-        return [Path(part.strip()).expanduser() for part in stripped.split(separator) if part.strip()]
+        parts: list[str] = []
+        for chunk in stripped.split(";"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            if os.pathsep == ";" or _WINDOWS_DRIVE_PATH.match(chunk):
+                parts.append(chunk)
+            else:
+                parts.extend(part.strip() for part in chunk.split(os.pathsep) if part.strip())
+        return [Path(part).expanduser() for part in parts]
     if isinstance(value, (list, tuple, set)):
         return [Path(str(item)).expanduser() for item in value if str(item).strip()]
     return [Path(str(value)).expanduser()]
